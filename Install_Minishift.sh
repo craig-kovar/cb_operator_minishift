@@ -1321,6 +1321,7 @@ do
 			delete_cluster
 			;;
 		get_admin_ui)
+			checkOC
 			get_admin_ui
 			;;
 		setup_s2i)
@@ -1344,6 +1345,7 @@ do
 			remove_twitter_ui
 			;;
 		get_twitter_ui)
+			checkOC
 			get_twitter_ui
 			;;
 		deploy_twitter_streamer)
