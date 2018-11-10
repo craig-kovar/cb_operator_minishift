@@ -29,6 +29,7 @@ function logSection
 
 
 #Constants
+VERSION=1.0.0
 user="none"
 status="Stopped"
 
@@ -43,7 +44,46 @@ fi
 #--------------------------------------------------------------#
 #	Functions
 #--------------------------------------------------------------#
-function getStatus
+function check_prereq
+{
+	logSection "Checking prereqs..."
+	fail=0
+	if  ! type brew > /dev/null;then
+		fail=1
+		log "Home Brew is not installed"
+	else
+		log "Home Brew	... passed"
+	fi
+	
+	if  ! type wget > /dev/null;then
+		fail=1
+		log "wget is not installed"
+	else
+		log "wget	... passed"
+	fi
+	
+	if  ! type docker > /dev/null;then
+		fail=1
+		log "docker is not installed"
+	else
+		log "docker	... passed"
+	fi
+
+	if  ! type virtualbox > /dev/null;then
+		fail=1
+		log "virtualbox is not installed"
+	else
+		log "virtualbox	... passed"
+	fi
+
+	if [ $fail -ge 1 ];then
+		log "Prerequisites did not pass...."
+		exit 1
+	fi
+
+}
+
+function get_status
 {
 	logSection "Retrieving status...."
 	status=`minishift status | grep Minishift | cut -d" " -f3`
@@ -86,7 +126,7 @@ function checkOC
 	trap - ERR
 	trap errPass ERR
 	if  ! type oc > /dev/null;then
-		log "OC command not registered, run . ./Install_Minishift.sh setEnv"
+		log "OC command not registered, run . ./Install_Minishift.sh set_env"
 		trap - ERR
 		exit 1
 	fi
@@ -96,9 +136,9 @@ function checkOC
 	trap onError ERR
 }
 
-function setEnv
+function set_env
 {
-	getStatus
+	get_status
 	if [ "$status" = "Running" ];then
 		eval $(minishift oc-env)
 		log "OC is registered"
@@ -107,8 +147,10 @@ function setEnv
 	fi
 }
 
-function installCore
+function install_core
 {
+	check_prereq
+
 	#Install Minishift
 	logSection "Installing minishift...."
 	brew cask install minishift
@@ -146,11 +188,11 @@ function installCore
 	eval $(minishift oc-env)
 }
 
-function startMinishift
+function start_minishift
 {
 	logSection "Starting Minishift"
 
-	getStatus
+	get_status
 
 	if [[ "$status" = "Stopped" || -z $status ]];then
 		log "Starting minishift...."
@@ -168,7 +210,7 @@ function startMinishift
 function stopMinishift
 {
 	logSection "Stopping Minishift"
-	getStatus
+	get_status
 	if [ "$status" = "Running" ];then
 		log "Stopping minishift...."
 		minishift stop
@@ -197,11 +239,11 @@ function create_project
 	#oc logout
 }
 
-function getUser
+function get_user
 {
 	logSection "Retrieving User...."
 	log "Checking minishift status"
-	getStatus
+	get_status
 	if [ "$status" = "Running" ];then
 		user=`oc whoami | awk '{print $1}'`
 		log "Current user is : $user"
@@ -211,10 +253,10 @@ function getUser
 	fi
 }
 
-function installCRD
+function install_crd
 {
 	logSection "Deploying Couchbase CRD"
-	getUser
+	get_user
 	if [ "$user" = "developer" ];then
 		log "User [$user] has insufficient priveleges to install CRD, switching to admin"
 		oc logout
@@ -252,7 +294,7 @@ function installCRD
 function create_rh_secret {
 	logSection "Creating RedHat secret..."
 
-	getUser
+	get_user
 	if [ "$user" = "developer" ];then
                 log "User [$user] has insufficient priveleges to install CRD, switching to admin"
                 oc logout
@@ -407,7 +449,7 @@ function kube_delete_object {
 function create_operator {
 	logSection "Creating the operator"
 	
-	getUser
+	get_user
 	if [ "$user" != "developer" ];then
                 log "Switching from $user to developer"
                 oc logout
@@ -464,7 +506,7 @@ function create_operator {
 function create_cluster_role {
 	logSection "Creating the cluster role"
 	
-	getUser
+	get_user
 	if [ "$user" = "developer" ];then
                 log "User [$user] has insufficient priveleges to install CRD, switching to admin"
                 oc logout
@@ -487,7 +529,7 @@ function create_cluster_role {
 function create_service_account {
 	logSection "Creating the service account"
 	
-	getUser
+	get_user
 	if [ "$user" = "developer" ];then
                 log "User [$user] has insufficient priveleges to install CRD, switching to admin"
                 oc logout
@@ -509,11 +551,11 @@ function create_service_account {
 	fi
 }
 
-function bindServiceAccount
+function bind_svc_account
 {
 	logSection "Binding the service account"
 
-	getUser
+	get_user
 	if [ "$user" = "developer" ];then
                 log "User [$user] has insufficient priveleges to bind user, switching to admin"
                 oc logout
@@ -546,7 +588,7 @@ function bindServiceAccount
 function create_user_role {
 	logSection "Creating the user role"
 	
-	getUser
+	get_user
 	if [ "$user" = "developer" ];then
                 log "User [$user] has insufficient priveleges to install CRD, switching to admin"
                 oc logout
@@ -566,11 +608,11 @@ function create_user_role {
 	fi
 }
 
-function bindUser
+function bind_user
 {
 	logSection "Binding the developer account"
 
-	getUser
+	get_user
 	if [ "$user" = "developer" ];then
                 log "User [$user] has insufficient priveleges to bind user, switching to admin"
                 oc logout
@@ -617,7 +659,7 @@ function install_cbopctl
 function create_secret {
 	logSection "Creating the CB user secret"
 	
-	getStatus
+	get_status
 	
 	if [ "$status" = "Running" ];then
 		cr_count=`oc get secret | grep -c "$SECRET_NAME"`
@@ -636,7 +678,7 @@ function full_rollback
 {
 	logSection "Performing a full rollback"
 	
-	getUser
+	get_user
 	if [ "$user" = "developer" ];then
                 log "User [$user] has insufficient priveleges to bind user, switching to admin"
                 oc logout
@@ -728,7 +770,7 @@ function full_rollback
 function upsert_cluster
 {
 	logSection "Upserting couchbase cluster..."
-	getStatus
+	get_status
 	
 	if [ "$status" = "Running" ];then
 		cr_count=`oc get couchbasecluster | grep -c "$CLUSTER_NAME"`
@@ -768,7 +810,7 @@ function upsert_cluster
 function delete_cluster
 {
 	logSection "Deleting couchbase cluster..."
-	getStatus
+	get_status
 	
 	if [ "$status" = "Running" ];then
 		cr_count=`oc get couchbasecluster | grep -c "$CLUSTER_NAME"`
@@ -798,7 +840,7 @@ function create_accounts
 {
 	logSection "Creating accounts"
 
-	startMinishift
+	start_minishift
 
 	create_rh_secret
 
@@ -806,11 +848,11 @@ function create_accounts
 
 	create_service_account
 
-	bindServiceAccount
+	bind_svc_account
 
 	create_user_role
 
-	bindUser
+	bind_user
 }
 
 
@@ -818,11 +860,11 @@ function full_deploy
 {
 	logSection "Performing a full deployment"
 
-	startMinishift
+	start_minishift
 
 	create_project
 
-	installCRD
+	install_crd
 
 	create_accounts
 
@@ -835,13 +877,15 @@ function full_deploy
 	upsert_cluster
 
 	get_admin_ui
+
+	log "\n\nCheck oc get pods for status of cluster deployment"
 	
 }	
 
 function get_admin_ui
 {
 	logSection "Retrieving the admin UI location..."
-	getStatus
+	get_status
 	
 	if [ "$status" = "Running" ];then
 		cr_count=`oc get routes | grep -c "${CLUSTER_NAME}-ui"`
@@ -865,7 +909,7 @@ function get_admin_ui
 function setup_s2i
 {
 	logSection "Setting up S2I for Java applications"
-	getStatus
+	get_status
 	
 	if [ "$status" = "Running" ];then
 		log "Running: oc import-image registry.access.redhat.com/redhat-openjdk-18/openjdk18-openshift --confirm"
@@ -878,7 +922,7 @@ function setup_s2i
 function deploy_twitter_api
 {
 	logSection "Deploying twitter-api"
-	getStatus
+	get_status
 	
 	if [ "$status" = "Running" ];then
 
@@ -934,7 +978,7 @@ function deploy_twitter_api
 function remove_twitter_api
 {
 	logSection "Removing twitter-api"
-	getStatus
+	get_status
 	
 	if [ "$status" = "Running" ];then
 		log "Removing twitter-api service"
@@ -978,7 +1022,7 @@ function remove_twitter_api
 function deploy_twitter_ui
 {
 	logSection "Deploying twitter-ui"
-	getStatus
+	get_status
 
 	if [ "$status" = "Running" ];then
 
@@ -1001,7 +1045,7 @@ function deploy_twitter_ui
 function remove_twitter_ui
 {
 	logSection "Removing twitter-ui"
-	getStatus
+	get_status
 	
 	if [ "$status" = "Running" ];then
 		log "Removing twitter-ui service"
@@ -1045,7 +1089,7 @@ function remove_twitter_ui
 function get_twitter_ui
 {
 	logSection "Retrieving the twitter UI location..."
-	getStatus
+	get_status
 	
 	if [ "$status" = "Running" ];then
 		cr_count=`oc get routes | grep -c "twitter-ui"`
@@ -1062,7 +1106,7 @@ function get_twitter_ui
 function deploy_twitter_streamer
 {
 	logSection "Deploy twitter streamer"
-	getStatus
+	get_status
 
 	if [ "$status" = "Running" ];then
 
@@ -1128,7 +1172,7 @@ function deploy_twitter_streamer
 function remove_twitter_streamer
 {
 	logSection "Removing twitter-streamer"
-	getStatus
+	get_status
 	
 	if [ "$status" = "Running" ];then
 		log "Removing twitter-streamer service"
@@ -1171,26 +1215,28 @@ function remove_twitter_streamer
 
 function usage
 {
-	echo ". ./Install_Minishift.sh [step 1] [step 2] ... [step N]"
+	echo "Install_Minishift.sh [step 1] [step 2] ... [step N]"
+	echo "Version :  $VERSION"
+	echo ""
 	echo "	Steps: "
-	echo "		installCore		--	Installs Minishift, downloads the CB Operator, Starts minishift and sets up the OC command"
-	echo "		startMinishift		--	Starts Minishift and sets up the OC command"
+	echo "		install_core		--	Installs Minishift, downloads the CB Operator, Starts minishift and sets up the OC command"
+	echo "		start_minishift		--	Starts Minishift"
 	echo "		create_project		--	Creates an OpenShift Project"
-	echo "		installCRD		--	Installs the Couchbase Custom Resource Definition"
-	echo "		getUser			--	Returns the current logged in user"
-	echo "		getStatus		--	Returns the status of Minishift"
+	echo "		install_crd		--	Installs the Couchbase Custom Resource Definition"
+	echo "		get_user			--	Returns the current logged in user"
+	echo "		get_status		--	Returns the status of Minishift"
 	echo "		create_rh_secret	--	Create a RedHat secret for access to RH Docker Images"
 	echo "		create_operator		--	Create the CB Operator"
 	echo "		create_cluster_role	--	Creates the cluster role for the service account"
 	echo "		create_service_account	--	Creates the service account"
-	echo "		bindServiceAccount	--	Bind the service account to secret"
+	echo "		bind_svc_account	--	Bind the service account to secret"
 	echo "		create_user_role	--	Create the user role for developer"
-	echo "		bindUser		--	Bind the developer account"
+	echo "		bind_user		--	Bind the developer account"
 	echo "		install_cbopctl		--	Install cbopctl tool"
 	echo "		create_secret		--	Create the CB Super User secret"
 	echo "		upsert_cluster		--	Create or Apply a CB Cluster"
 	echo "		delete_cluster		--	Delete the specified cluster"
-	echo "		setEnv			--	Set minishift oc-env"
+	echo "		set_env			--	Set minishift oc-env"
 	echo "		get_admin_ui		--	Get Admin UI URL"
 	echo ""
 	echo "	Composite Steps: "
@@ -1199,13 +1245,13 @@ function usage
 	echo "							create_rh_secret"
 	echo "							create_cluster_role"
 	echo "							create_service_account"
-	echo "							bindServiceAccount"
+	echo "							bind_svc_account"
 	echo "							create_user_role"
-	echo "							bindUser"
+	echo "							bind_user"
 	echo ""	
 	echo "		full_deploy		--	Perform a full deployment of OC components by running the following steps"
 	echo "							create_project"
-	echo "							installCRD"
+	echo "							install_crd"
 	echo "							create_accounts"
 	echo "							create_operator"
 	echo "							install_cbopctl"
@@ -1240,22 +1286,22 @@ do
 			usage
 			break
 			;;
-		installCore)
-			installCore
+		install_core)
+			install_core
 			;;
-		startMinishift)
-			startMinishift
+		start_minishift)
+			start_minishift
 			;;
-		installCRD)
+		install_crd)
 			checkOC
-			installCRD
+			install_crd
 			;;
-		getUser)
+		get_user)
 			checkOC
-			getUser
+			get_user
 			;;
-		getStatus)
-			getStatus
+		get_status)
+			get_status
 			;;
 		create_rh_secret)
 			checkOC
@@ -1273,17 +1319,17 @@ do
 			checkOC
 			create_service_account
 			;;
-		bindServiceAccount)
+		bind_svc_account)
 			checkOC
-			bindServiceAccount
+			bind_svc_account
 			;;
 		create_user_role)
 			checkOC
 			create_user_role
 			;;
-		bindUser)
+		bind_user)
 			checkOC
-			bindUser
+			bind_user
 			;;
 		install_cbopctl)
 			install_cbopctl
@@ -1304,8 +1350,8 @@ do
 			checkOC
 			full_rollback
 			;;
-		setEnv)
-			setEnv
+		set_env)
+			set_env
 			;;
 		full_deploy)
 			checkOC
