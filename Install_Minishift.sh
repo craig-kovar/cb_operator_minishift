@@ -1213,10 +1213,57 @@ function remove_twitter_streamer
 	fi
 }
 
+function deploy_mysql
+{
+	logSection "Deploying MySQL DB"
+
+	get_status
+
+	if [ "$status" = "Running" ];then
+		
+		log "\n	oc new-app -e MYSQL_USER=$MYSQL_USER \
+\n\t-e MYSQL_PASSWORD=$MYSQL_PASSWORD \
+\n\t-e MYSQL_DATABASE=$MYSQL_DATABASE \
+\n\t-e MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD \
+\n\topenshift/mysql-55-centos7\n"
+
+		oc new-app -e MYSQL_USER=$MYSQL_USER \
+-e MYSQL_PASSWORD=$MYSQL_PASSWORD \
+-e MYSQL_DATABASE=$MYSQL_DATABASE \
+-e MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD \
+openshift/mysql-55-centos7
+
+
+	fi
+}
+
+function deploy_postgre
+{
+	logSection "Deploying PostGRE DB"
+
+	get_status
+
+	if [ "$status" = "Running" ];then
+		
+		log "\n	oc new-app -e POSTGRESQL_USER=$POSTGRESQL_USER \
+\n\t-e POSTGRESQL_PASSWORD=$POSTGRESQL_PASSWORD \
+\n\t-e POSTGRESQL_DATABASE=$POSTGRESQL_DATABASE \
+\n\topenshift/postgresql-92-centos7"
+
+
+		oc new-app -e POSTGRESQL_USER=$POSTGRESQL_USER \
+-e POSTGRESQL_PASSWORD=$POSTGRESQL_PASSWORD \
+-e POSTGRESQL_DATABASE=$POSTGRESQL_DATABASE \
+openshift/postgresql-92-centos7
+
+
+	fi
+}
+
 function usage
 {
 	echo "Install_Minishift.sh [step 1] [step 2] ... [step N]"
-	echo "Version :  $VERSION"
+	echo "Version :  $VERSIO"
 	echo ""
 	echo "	Steps: "
 	echo "		install_core		--	Installs Minishift, downloads the CB Operator, Starts minishift and sets up the OC command"
@@ -1257,7 +1304,7 @@ function usage
 	echo "							install_cbopctl"
 	echo "							create_secret"
 	echo "							upsert_cluster"
-	echo "	Application Steps: "
+	echo "	Twitter Application Steps: "
 	echo "		setup_s2i		--	Sets up S2I for Java applications, necessary to run new-app build steps"
 	echo "		deploy_twitter_api	--	Deploys the twitter-api java application"
 	echo "		remove_twitter_api	--	Remove the twitter-api"
@@ -1266,6 +1313,10 @@ function usage
 	echo "		get_twitter_ui		--	Get twitter UI"
 	echo "		deploy_twitter_streamer	--	Deploy the twitter streaming application"
 	echo "		remove_twitter_streamer	--	Remove the twitter streaming application"
+	echo ""
+	echo "  Optional OC commands: "
+	echo "		deploy_mysql		--	Deploys a MySQL DB"
+	echo "		deploy_postgre		--	Deploys a PostGRE DB"
 }
 
 
@@ -1401,6 +1452,14 @@ do
 		remove_twitter_streamer)
 			checkOC
 			remove_twitter_streamer
+			;;
+		deploy_mysql)
+			checkOC
+			deploy_mysql
+			;;
+		deploy_postgre)
+			checkOC
+			deploy_postgre
 			;;
 		*)
 			log "Unknown command $var, ignoring..."

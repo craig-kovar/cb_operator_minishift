@@ -1,0 +1,5 @@
+email,ticketNo,user,date,comments
+balaji@cb.com,1234,Balaji,6/23/18,When is the CB Lite live for xamarin?#Is data migration feature available in Cloud service?
+john@cb.com,5678,John,5/20/18,Can I achieve function trigger using Eventing?#Does couchbase provide full text search?
+mark@cb.com,6895,Mark,4/14/18,Need more insight on eventing.
+richard@cb.com,7645,Richard,4/23/18,When is the Eventing service live?
