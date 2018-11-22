@@ -1,0 +1,63 @@
+ {
+"name": "cards",
+"type": "fulltext-index",
+"params": {
+  "doc_config": {
+   "docid_prefix_delim": "",
+   "docid_regexp": "",
+   "mode": "type_field",
+   "type_field": "_class"
+  },
+  "mapping": {
+   "default_analyzer": "standard",
+   "default_datetime_parser": "dateTimeOptional",
+   "default_field": "_all",
+   "default_mapping": {
+    "default_analyzer": "",
+    "dynamic": true,
+    "enabled": false
+   },
+   "default_type": "_default",
+   "docvalues_dynamic": true,
+   "index_dynamic": true,
+   "store_dynamic": false,
+   "type_field": "_type",
+   "types": {
+    "com.cb.sync.entities.Cards": {
+     "default_analyzer": "",
+     "dynamic": false,
+     "enabled": true,
+     "properties": {
+      "productName": {
+       "enabled": true,
+       "dynamic": false,
+       "fields": [
+        {
+         "analyzer": "en",
+         "include_in_all": true,
+         "include_term_vectors": true,
+         "index": true,
+         "name": "productName",
+         "type": "text"
+        }
+       ]
+      }
+     }
+    }
+   }
+  },
+  "store": {
+   "indexType": "scorch",
+   "kvStoreName": "mossStore"
+  }
+},
+"sourceType": "couchbase",
+"sourceName": "###C360_BUCKET###",
+"sourceUUID": "",
+"sourceParams": {},
+"planParams": {
+  "maxPartitionsPerPIndex": 171,
+  "numReplicas": 0
+},
+"uuid": ""
+}

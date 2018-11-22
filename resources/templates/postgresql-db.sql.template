@@ -1,15 +1,15 @@
--- DROP SCHEMA cb_demo;
+-- DROP SCHEMA ###POSTGRESQL_SCHEMA###;
 
-CREATE SCHEMA cb_demo;
+CREATE SCHEMA ###POSTGRESQL_SCHEMA###;
 
 
 --
 -- Table structure for table `user`
 --
 
--- DROP TABLE cb_demo."user"
+-- DROP TABLE ###POSTGRESQL_SCHEMA###."user"
 
-CREATE TABLE cb_demo."user" (
+CREATE TABLE ###POSTGRESQL_SCHEMA###."user" (
 	id bigserial NOT NULL,
 	city varchar(255) NULL,
 	email varchar(255) NULL,
@@ -27,7 +27,7 @@ WITH (
 -- Dumping data for table `user`
 --
 
-INSERT INTO cb_demo."user" (city,email,"name",phonenumber,zipcode,company) VALUES
+INSERT INTO ###POSTGRESQL_SCHEMA###."user" (city,email,"name",phonenumber,zipcode,company) VALUES
 ('Dallas','richard@cb.com','Richard','214-967-2387','75182','TCS')
 ,('New York','john@cb.com','John','212-567-8901','10055','Chase')
 ,('Dallas','balaji@cb.com','Balaji','214-039-2981','75215','Tekzenit')

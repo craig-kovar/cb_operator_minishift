@@ -1,8 +1,8 @@
-CREATE DATABASE  IF NOT EXISTS `cb_demo` /*!40100 DEFAULT CHARACTER SET utf8 */;
-USE `cb_demo`;
+CREATE DATABASE  IF NOT EXISTS `###MYSQL_DATABASE###` /*!40100 DEFAULT CHARACTER SET utf8 */;
+USE `###MYSQL_DATABASE###`;
 -- MySQL dump 10.13  Distrib 5.7.17, for macos10.12 (x86_64)
 --
--- Host: 127.0.0.1    Database: cb_demo
+-- Host: 127.0.0.1    Database: ###MYSQL_DATABASE###
 -- ------------------------------------------------------
 -- Server version	5.7.22
 
@@ -100,11 +100,11 @@ INSERT INTO `product` VALUES ('1','Cloud','Coud-native data platform','Couchbase
 UNLOCK TABLES;
 
 --
--- Dumping events for database 'cb_demo'
+-- Dumping events for database '###MYSQL_DATABASE###'
 --
 
 --
--- Dumping routines for database 'cb_demo'
+-- Dumping routines for database '###MYSQL_DATABASE###'
 --
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 

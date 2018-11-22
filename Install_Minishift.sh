@@ -90,6 +90,15 @@ function get_status
 	log "Current Status is : $status"
 }
 
+function verify_status
+{
+	get_status
+	if [ "$status" != "Running" ];then
+		log "Minishift is not running, exiting..."
+		exit 1
+	fi
+}
+
 function errPass
 {
 	log "Checking OC status"
@@ -221,9 +230,12 @@ function create_project
 {
 	#Login as developer
 	logSection "Creating an OpenShift Project"
-	log "Logging in as Developer"
-	oc logout
-	oc login --insecure-skip-tls-verify -u developer <<< "developer"
+
+	if [ "$DEPLOY_SOURCE" = "MINISHIFT" ];then
+		log "Logging in as Developer"
+		oc logout
+		oc login --insecure-skip-tls-verify -u developer <<< "developer"
+	fi
 
 	proj_cnt=`oc get project | grep -c ${OC_PROJ_NAME}`
 	if [ $proj_cnt -gt 0 ];then
@@ -257,7 +269,7 @@ function install_crd
 {
 	logSection "Deploying Couchbase CRD"
 	get_user
-	if [ "$user" = "developer" ];then
+	if [[ "$user" = "developer"  && "$DEPLOY_SOURCE" = "MINISHIFT" ]];then
 		log "User [$user] has insufficient priveleges to install CRD, switching to admin"
 		oc logout
 		oc login --insecure-skip-tls-verify -u admin <<< "admin"
@@ -295,7 +307,7 @@ function create_rh_secret {
 	logSection "Creating RedHat secret..."
 
 	get_user
-	if [ "$user" = "developer" ];then
+	if [[ "$user" = "developer" && "$DEPLOY_SOURCE" = "MINISHIFT" ]];then
                 log "User [$user] has insufficient priveleges to install CRD, switching to admin"
                 oc logout
                 oc login --insecure-skip-tls-verify -u admin <<< "admin"
@@ -450,7 +462,7 @@ function create_operator {
 	logSection "Creating the operator"
 	
 	get_user
-	if [ "$user" != "developer" ];then
+	if [[ "$user" != "developer" && "$DEPLOY_SOURCE" = "MINISHIFT" ]];then
                 log "Switching from $user to developer"
                 oc logout
                 oc login --insecure-skip-tls-verify -u developer <<< "developer"
@@ -507,7 +519,7 @@ function create_cluster_role {
 	logSection "Creating the cluster role"
 	
 	get_user
-	if [ "$user" = "developer" ];then
+	if [[ "$user" = "developer" && "$DEPLOY_SOURCE" = "MINISHIFT" ]];then
                 log "User [$user] has insufficient priveleges to install CRD, switching to admin"
                 oc logout
                 oc login --insecure-skip-tls-verify -u admin <<< "admin"
@@ -530,7 +542,7 @@ function create_service_account {
 	logSection "Creating the service account"
 	
 	get_user
-	if [ "$user" = "developer" ];then
+	if [[ "$user" = "developer" && "$DEPLOY_SOURCE" = "MINISHIFT" ]];then
                 log "User [$user] has insufficient priveleges to install CRD, switching to admin"
                 oc logout
                 oc login --insecure-skip-tls-verify -u admin <<< "admin"
@@ -556,7 +568,7 @@ function bind_svc_account
 	logSection "Binding the service account"
 
 	get_user
-	if [ "$user" = "developer" ];then
+	if [[ "$user" = "developer" && "$DEPLOY_SOURCE" = "MINISHIFT" ]];then
                 log "User [$user] has insufficient priveleges to bind user, switching to admin"
                 oc logout
                 oc login --insecure-skip-tls-verify -u admin <<< "admin"
@@ -589,7 +601,7 @@ function create_user_role {
 	logSection "Creating the user role"
 	
 	get_user
-	if [ "$user" = "developer" ];then
+	if [[ "$user" = "developer" && "$DEPLOY_SOURCE" = "MINISHIFT" ]];then
                 log "User [$user] has insufficient priveleges to install CRD, switching to admin"
                 oc logout
                 oc login --insecure-skip-tls-verify -u admin <<< "admin"
@@ -613,7 +625,7 @@ function bind_user
 	logSection "Binding the developer account"
 
 	get_user
-	if [ "$user" = "developer" ];then
+	if [[ "$user" = "developer" && "$DEPLOY_SOURCE" = "MINISHIFT" ]];then
                 log "User [$user] has insufficient priveleges to bind user, switching to admin"
                 oc logout
                 oc login --insecure-skip-tls-verify -u admin <<< "admin"
@@ -679,7 +691,7 @@ function full_rollback
 	logSection "Performing a full rollback"
 	
 	get_user
-	if [ "$user" = "developer" ];then
+	if [[ "$user" = "developer" && "$DEPLOY_SOURCE" = "MINISHIFT" ]];then
                 log "User [$user] has insufficient priveleges to bind user, switching to admin"
                 oc logout
                 oc login --insecure-skip-tls-verify -u admin <<< "admin"
@@ -1217,106 +1229,299 @@ function deploy_mysql
 {
 	logSection "Deploying MySQL DB"
 
-	get_status
+	verify_status
 
-	if [ "$status" = "Running" ];then
-		
 		log "\n	oc new-app -e MYSQL_USER=$MYSQL_USER \
 \n\t-e MYSQL_PASSWORD=$MYSQL_PASSWORD \
 \n\t-e MYSQL_DATABASE=$MYSQL_DATABASE \
 \n\t-e MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD \
-\n\topenshift/mysql-55-centos7\n"
+\n\t--name=${MYSQL_NAME} \
+\n\tmysql:latest"
 
 		oc new-app -e MYSQL_USER=$MYSQL_USER \
 -e MYSQL_PASSWORD=$MYSQL_PASSWORD \
 -e MYSQL_DATABASE=$MYSQL_DATABASE \
 -e MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD \
-openshift/mysql-55-centos7
+--name=${MYSQL_NAME} \
+mysql:latest
 
+	log "oc expose svc/${MYSQL_NAME}"
+	oc expose svc/${MYSQL_NAME}
 
-	fi
 }
 
-function deploy_postgre
+function deploy_postgres
 {
-	logSection "Deploying PostGRE DB"
+	logSection "Deploying Postgres DB"
 
-	get_status
+	verify_status
 
-	if [ "$status" = "Running" ];then
 		
 		log "\n	oc new-app -e POSTGRESQL_USER=$POSTGRESQL_USER \
 \n\t-e POSTGRESQL_PASSWORD=$POSTGRESQL_PASSWORD \
 \n\t-e POSTGRESQL_DATABASE=$POSTGRESQL_DATABASE \
+--name=${POSTGRESQL_NAME} \
 \n\topenshift/postgresql-92-centos7"
 
 
 		oc new-app -e POSTGRESQL_USER=$POSTGRESQL_USER \
 -e POSTGRESQL_PASSWORD=$POSTGRESQL_PASSWORD \
 -e POSTGRESQL_DATABASE=$POSTGRESQL_DATABASE \
+--name=${POSTGRESQL_NAME} \
 openshift/postgresql-92-centos7
 
+	log "oc expose svc/${POSTGRESQL_NAME}"
+	oc expose svc/${POSTGRESQL_NAME}
 
+}
+
+function port_forward
+{
+	logSection "Forwarding ports"
+
+	verify_status	
+
+		log "Running oc port-forward -p cb-example-0000 8091:8091 8092:8092 8093:8093 8094:8094 8095:8095 8096:8096 11210:11210 11211:11211 &"
+		oc port-forward cb-example-0000 8091:8091 8092:8092 8093:8093 8094:8094 8095:8095 8096:8096 11210:11210 11211:11211 &
+}
+
+function create_mysql_user
+{
+        logSection "Creating mysql user"
+
+        verify_status
+
+	MYSQL_NAME_TMP=`oc get pods | grep ${MYSQL_NAME} | grep -v deploy | cut -d' ' -f1`
+
+        cp -fp ./resources/templates/create_user.sql.template ./resources/create_user.sql
+
+        sed -e "s/###MYSQL_USER###/$MYSQL_USER/g" -e "s/###MYSQL_PASSWORD###/$MYSQL_PASSWORD/g" -i .bkup ./resources/create_user.sql
+
+        log "oc cp ./resources/create_user.sql ${MYSQL_NAME_TMP}:/tmp/create_user.sql"
+        oc cp ./resources/create_user.sql ${MYSQL_NAME_TMP}:/tmp/create_user.sql
+
+        log "oc exec -it ${MYSQL_NAME_TMP} -- bash -c \"mysql -uroot -p${MYSQL_ROOT_PASSWORD} -h${MYSQL_NAME_TMP} < /tmp/create_user.sql\""
+        oc exec -it ${MYSQL_NAME_TMP} -- bash -c "mysql -uroot -p${MYSQL_ROOT_PASSWORD} -h${MYSQL_NAME_TMP} < /tmp/create_user.sql"
+}
+
+function load_mysql_data
+{
+	logSection "Loading mysql data"
+
+        verify_status
+
+	MYSQL_NAME_TMP=`oc get pods | grep ${MYSQL_NAME} | grep -v deploy | cut -d' ' -f1`
+
+        cp -fp ./resources/templates/mysql-db.sql.template ./resources/mysql-db.sql
+
+        sed -e "s/###MYSQL_DATABASE###/$MYSQL_DATABASE/g" -i .bkup ./resources/mysql-db.sql
+
+        log "oc cp ./resources/mysql-db.sql ${MYSQL_NAME_TMP}:/tmp/mysql-db.sql"
+        oc cp ./resources/mysql-db.sql ${MYSQL_NAME_TMP}:/tmp/mysql-db.sql
+
+        log "oc exec -it ${MYSQL_NAME_TMP} -- bash -c \"mysql -u${MYSQL_USER} -p${MYSQL_PASSWORD} -h${MYSQL_NAME_TMP} < /tmp/mysql-db.sql\""
+        oc exec -it ${MYSQL_NAME_TMP} -- bash -c "mysql -u${MYSQL_USER} -p${MYSQL_PASSWORD} -h${MYSQL_NAME_TMP} < /tmp/mysql-db.sql"
+}
+
+function load_postgres_data
+{
+	logSection "Loading postgre data"
+
+        verify_status
+
+	POSTGRE_NAME_TMP=`oc get pods | grep ${POSTGRESQL_NAME} | grep -v deploy | cut -d' ' -f1`
+
+        cp -fp ./resources/templates/postgresql-db.sql.template ./resources/postgresql-db.sql
+
+        sed -e "s/###POSTGRESQL_SCHEMA###/$POSTGRESQL_SCHEMA/g" -e "s/###POSTGRESQL_DATABASE###/$POSTGRESQL_DATABASE/g" -i .bkup ./resources/postgresql-db.sql
+
+        log "oc cp ./resources/postgresql-db.sql ${POSTGRE_NAME_TMP}:/tmp/postgresql-db.sql"
+        oc cp ./resources/postgresql-db.sql ${POSTGRE_NAME_TMP}:/tmp/postgresql-db.sql
+
+        log "oc exec -it ${POSTGRE_NAME_TMP} -- bash -c \"psql postgres postgres -d ${POSTGRESQL_DATABASE} -f /tmp/postgresql-db.sql\""
+        oc exec -it ${POSTGRE_NAME_TMP} -- bash -c "psql postgres postgres -d ${POSTGRESQL_DATABASE} -f /tmp/postgresql-db.sql"
+}
+
+function remove_mysql
+{
+	logSection "Removing mysql"
+	verify_status
+	
+	log "Removing ${MYSQL_NAME} service"
+	count=`oc get svc | grep -c ${MYSQL_NAME}`
+	if [ $count -eq 1 ];then
+		log "Running: oc delete svc ${MYSQL_NAME}"
+		oc delete svc ${MYSQL_NAME}
 	fi
+
+	log "Removing ${MYSQL_NAME} deploymentconfig"
+	count=`oc get dc | grep -c ${MYSQL_NAME}`
+	if [ $count -eq 1 ];then
+		log "Running: oc delete dc ${MYSQL_NAME}"
+		oc delete dc ${MYSQL_NAME}
+	fi
+
+	log "Removing ${MYSQL_NAME} buildconfig"
+	count=`oc get bc | grep -c ${MYSQL_NAME}`
+	if [ $count -eq 1 ];then
+		log "Running: oc delete bc ${MYSQL_NAME}"
+		oc delete bc ${MYSQL_NAME}
+	fi
+
+	log "Removing ${MYSQL_NAME} imagestream"
+	count=`oc get is | grep -c ${MYSQL_NAME}`
+	if [ $count -eq 1 ];then
+		log "Running: oc delete is ${MYSQL_NAME}"
+		oc delete is ${MYSQL_NAME}
+	fi
+
+	log "Removing ${MYSQL_NAME} route"
+	count=`oc get routes | grep -c ${MYSQL_NAME}`
+	if [ $count -eq 1 ];then
+		log "Running: oc delete route ${MYSQL_NAME}"
+		oc delete route ${MYSQL_NAME}
+	fi
+}
+
+function remove_postgres
+{
+	logSection "Removing postgre"
+	verify_status
+	
+	log "Removing ${POSTGRESQL_NAME} service"
+	count=`oc get svc | grep -c ${POSTGRESQL_NAME}`
+	if [ $count -eq 1 ];then
+		log "Running: oc delete svc ${POSTGRESQL_NAME}"
+		oc delete svc ${POSTGRESQL_NAME}
+	fi
+
+	log "Removing ${POSTGRESQL_NAME} deploymentconfig"
+	count=`oc get dc | grep -c ${POSTGRESQL_NAME}`
+	if [ $count -eq 1 ];then
+		log "Running: oc delete dc ${POSTGRESQL_NAME}"
+		oc delete dc ${POSTGRESQL_NAME}
+	fi
+
+	log "Removing ${POSTGRESQL_NAME} buildconfig"
+	count=`oc get bc | grep -c ${POSTGRESQL_NAME}`
+	if [ $count -eq 1 ];then
+		log "Running: oc delete bc ${POSTGRESQL_NAME}"
+		oc delete bc ${POSTGRESQL_NAME}
+	fi
+
+	log "Removing ${POSTGRESQL_NAME} imagestream"
+	count=`oc get is | grep -c ${POSTGRESQL_NAME}`
+	if [ $count -eq 1 ];then
+		log "Running: oc delete is ${POSTGRESQL_NAME}"
+		oc delete is ${POSTGRESQL_NAME}
+	fi
+
+	log "Removing ${POSTGRESQL_NAME} route"
+	count=`oc get routes | grep -c ${POSTGRESQL_NAME}`
+	if [ $count -eq 1 ];then
+		log "Running: oc delete route ${POSTGRESQL_NAME}"
+		oc delete route ${POSTGRESQL_NAME}
+	fi
+}
+
+function setup_c360_bucket
+{
+	logSection "Setting up the Customer 360 Bucket"
+
+	log "oc cp ./resources/cards.json ${C360_POD}:/tmp/cards.json"
+	oc cp ./resources/cards.json ${C360_POD}:/tmp/cards.json
+
+	log "oc exec -it ${C360_POD} -- bash -c \"/opt/couchbase/bin/cbimport json -c couchbase://cb-example-0000 -u ${CB_USER} -p ${CB_PASS} -b ${C360_BUCKET} -d file://tmp/cards.json -f list -l /tmp/cbimport_ck.log -g cards::#MONO_INCR#\""
+	oc exec -it ${C360_POD} -- bash -c "/opt/couchbase/bin/cbimport json -c couchbase://cb-example-0000 -u ${CB_USER} -p ${CB_PASS} -b ${C360_BUCKET} -d file://tmp/cards.json -f list -l /tmp/cbimport_ck.log -g cards::#MONO_INCR#"
+
+        cp -fp ./resources/templates/cards_fts.json.template ./resources/cards_fts.json
+
+        sed -e "s/###C360_BUCKET###/$C360_BUCKET/g" -i .bkup ./resources/cards_fts.json
+	
+	log "oc cp ./resources/cards_fts.json ${C360_FTS_POD}:/tmp/cards_fts.json"
+	oc cp ./resources/cards_fts.json ${C360_FTS_POD}:/tmp/cards_fts.json
+
+	log "oc exec -it ${C360_FTS_POD} -- bash -c \"curl -u Administrator:password -XPUT http://localhost:8094/api/index/cards -H 'content-type: application/json'  -d @/tmp/cards_fts.json\""
+	oc exec -it ${C360_FTS_POD} -- bash -c "curl -u Administrator:password -XPUT http://localhost:8094/api/index/cards -H 'content-type: application/json'  -d @/tmp/cards_fts.json"
+        
+	cp -fp ./resources/templates/customers_fts.json.template ./resources/customers_fts.json
+
+        sed -e "s/###C360_BUCKET###/$C360_BUCKET/g" -i .bkup ./resources/customers_fts.json
+	
+	log "oc cp ./resources/customers_fts.json ${C360_FTS_POD}:/tmp/customers_fts.json"
+	oc cp ./resources/customers_fts.json ${C360_FTS_POD}:/tmp/customers_fts.json
+	
+	log "oc exec -it ${C360_FTS_POD} -- bash -c \"curl -u Administrator:password -XPUT http://localhost:8094/api/index/customers -H 'content-type: application/json'  -d @/tmp/customers_fts.json\""
+	oc exec -it ${C360_FTS_POD} -- bash -c "curl -u Administrator:password -XPUT http://localhost:8094/api/index/customers -H 'content-type: application/json'  -d @/tmp/customers_fts.json"
 }
 
 function usage
 {
-	echo "Install_Minishift.sh [step 1] [step 2] ... [step N]"
-	echo "Version :  $VERSIO"
-	echo ""
-	echo "	Steps: "
-	echo "		install_core		--	Installs Minishift, downloads the CB Operator, Starts minishift and sets up the OC command"
-	echo "		start_minishift		--	Starts Minishift"
-	echo "		create_project		--	Creates an OpenShift Project"
-	echo "		install_crd		--	Installs the Couchbase Custom Resource Definition"
-	echo "		get_user			--	Returns the current logged in user"
-	echo "		get_status		--	Returns the status of Minishift"
-	echo "		create_rh_secret	--	Create a RedHat secret for access to RH Docker Images"
-	echo "		create_operator		--	Create the CB Operator"
-	echo "		create_cluster_role	--	Creates the cluster role for the service account"
-	echo "		create_service_account	--	Creates the service account"
-	echo "		bind_svc_account	--	Bind the service account to secret"
-	echo "		create_user_role	--	Create the user role for developer"
-	echo "		bind_user		--	Bind the developer account"
-	echo "		install_cbopctl		--	Install cbopctl tool"
-	echo "		create_secret		--	Create the CB Super User secret"
-	echo "		upsert_cluster		--	Create or Apply a CB Cluster"
-	echo "		delete_cluster		--	Delete the specified cluster"
-	echo "		set_env			--	Set minishift oc-env"
-	echo "		get_admin_ui		--	Get Admin UI URL"
-	echo ""
-	echo "	Composite Steps: "
-	echo "		full_rollback		--	Perform a full_rollback of all Minishift components (no software uninstalled)"
-	echo "		create_accounts		--	Creates all accounts and bindings by running the following steps"
-	echo "							create_rh_secret"
-	echo "							create_cluster_role"
-	echo "							create_service_account"
-	echo "							bind_svc_account"
-	echo "							create_user_role"
-	echo "							bind_user"
-	echo ""	
-	echo "		full_deploy		--	Perform a full deployment of OC components by running the following steps"
-	echo "							create_project"
-	echo "							install_crd"
-	echo "							create_accounts"
-	echo "							create_operator"
-	echo "							install_cbopctl"
-	echo "							create_secret"
-	echo "							upsert_cluster"
-	echo "	Twitter Application Steps: "
-	echo "		setup_s2i		--	Sets up S2I for Java applications, necessary to run new-app build steps"
-	echo "		deploy_twitter_api	--	Deploys the twitter-api java application"
-	echo "		remove_twitter_api	--	Remove the twitter-api"
-	echo "		deploy_twitter_ui	--	Deploy the twitter-ui java application"
-	echo "		remove_twitter_ui	--	Remove the twitter_ui application"
-	echo "		get_twitter_ui		--	Get twitter UI"
-	echo "		deploy_twitter_streamer	--	Deploy the twitter streaming application"
-	echo "		remove_twitter_streamer	--	Remove the twitter streaming application"
-	echo ""
-	echo "  Optional OC commands: "
-	echo "		deploy_mysql		--	Deploys a MySQL DB"
-	echo "		deploy_postgre		--	Deploys a PostGRE DB"
+	 USAGE="Install_Minishift.sh [step 1] [step 2] ... [step N]\n
+	 Version :  $VERSION\n
+	 \n
+	 	\tSteps: \n
+	 		\t\tinstall_core		--	Installs Minishift, downloads the CB Operator, Starts minishift and sets up the OC command\n
+	 		\t\tstart_minishift		--	Starts Minishift\n
+	 		\t\tcreate_project		--	Creates an OpenShift Project\n
+	 		\t\tinstall_crd			--	Installs the Couchbase Custom Resource Definition\n
+	 		\t\tget_user			--	Returns the current logged in user\n
+	 		\t\tget_status			--	Returns the status of Minishift\n
+	 		\t\tcreate_rh_secret		--	Create a RedHat secret for access to RH Docker Images\n
+	 		\t\tcreate_operator		--	Create the CB Operator\n
+	 		\t\tcreate_cluster_role		--	Creates the cluster role for the service account\n
+	 		\t\tcreate_service_account	--	Creates the service account\n
+	 		\t\tbind_svc_account		--	Bind the service account to secret\n
+	 		\t\tcreate_user_role		--	Create the user role for developer\n
+	 		\t\tbind_user			--	Bind the developer account\n
+	 		\t\tinstall_cbopctl		--	Install cbopctl tool\n
+	 		\t\tcreate_secret		--	Create the CB Super User secret\n
+	 		\t\tupsert_cluster		--	Create or Apply a CB Cluster\n
+	 		\t\tdelete_cluster		--	Delete the specified cluster\n
+	 		\t\tset_env			--	Set minishift oc-env\n
+	 		\t\tget_admin_ui		--	Get Admin UI URL\n
+	 		\t\tport_forward		--	Port forward from cb-example-0000\n
+	\n 
+	 	\tComposite Steps: \n
+	 		\t\tfull_rollback		--	Perform a full_rollback of all Minishift components (no software uninstalled)\n
+	 		\t\tcreate_accounts		--	Creates all accounts and bindings by running the following steps\n
+	 							\t\t\t\t\tcreate_rh_secret\n
+	 							\t\t\t\t\tcreate_cluster_role\n
+	 							\t\t\t\t\tcreate_service_account\n
+	 							\t\t\t\t\tbind_svc_account\n
+	 							\t\t\t\t\tcreate_user_role\n
+	 							\t\t\t\t\tbind_user\n
+	 	\n
+	 		\t\tfull_deploy			--	Perform a full deployment of OC components by running the following steps\n
+	 							\t\t\t\t\tcreate_project\n
+	 							\t\t\t\t\tinstall_crd\n
+	 							\t\t\t\t\tcreate_accounts\n
+	 							\t\t\t\t\tcreate_operator\n
+	 							\t\t\t\t\tinstall_cbopctl\n
+	 							\t\t\t\t\tcreate_secret\n
+	 							\t\t\t\t\tupsert_cluster\n
+		\n
+	 	\tTwitter Application Steps:\n 
+	 		\t\tsetup_s2i		--	Sets up S2I for Java applications, necessary to run new-app build steps\n
+	 		\t\tdeploy_twitter_api	--	Deploys the twitter-api java application\n
+	 		\t\tremove_twitter_api	--	Remove the twitter-api\n
+	 		\t\tdeploy_twitter_ui	--	Deploy the twitter-ui java application\n
+	 		\t\tremove_twitter_ui	--	Remove the twitter_ui application\n
+	 		\t\tget_twitter_ui		--	Get twitter UI\n
+	 		\t\tdeploy_twitter_streamer	--	Deploy the twitter streaming application\n
+	 		\t\tremove_twitter_streamer	--	Remove the twitter streaming application\n
+	 \n
+	       \tCustomer 360 commands: \n
+	 		\t\tdeploy_mysql		--	Deploys a MySQL DB\n
+	 		\t\tcreate_mysql_user	--	Creates the mysql user\n
+			\t\tload_mysql_data	--	Load the data into mysql used by the C360 Demo\n
+			\t\tremove_mysql	--	Remove the MySQL Pod\n
+	 		\t\tdeploy_postgres	--	Deploys a PostGRE DB\n
+			\t\tload_postgres_data	--	Loads the postgresql data used by C360 Demo\n
+			\t\tremove_postgres	--	Removes the postgres DB\n
+			\t\tsetup_c360_bucket	--	Sets up the Couchbase Bucket for C360 Demo\n
+	"
+	echo $USAGE | more
 }
 
 
@@ -1457,9 +1662,37 @@ do
 			checkOC
 			deploy_mysql
 			;;
-		deploy_postgre)
+		deploy_postgres)
 			checkOC
-			deploy_postgre
+			deploy_postgres
+			;;
+		port_forward)
+			checkOC
+			port_forward
+			;;
+		create_mysql_user)
+			checkOC
+			create_mysql_user
+			;;
+		load_mysql_data)
+			checkOC
+			load_mysql_data
+			;;
+		remove_mysql)
+			checkOC
+			remove_mysql
+			;;
+		load_postgres_data)
+			checkOC
+			load_postgres_data
+			;;
+		remove_postgres)
+			checkOC
+			remove_postgres
+			;;
+		setup_c360_bucket)
+			checkOC
+			setup_c360_bucket
 			;;
 		*)
 			log "Unknown command $var, ignoring..."

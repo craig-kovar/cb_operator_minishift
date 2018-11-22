@@ -1,0 +1,34 @@
+[
+{
+      "_class": "com.cb.sync.entities.Cards",
+      "description": "Offline-first experiences",
+      "id": 1,
+      "image": "cb-lite.jpg",
+      "productName": "CB LITE",
+      "url": "https://www.couchbase.com/products/lite"
+},
+{
+      "_class": "com.cb.sync.entities.Cards",
+      "description": "Coud-native data platform",
+      "id": 2,
+      "image": "cb-cloud.jpg",
+      "productName": "CLOUD",
+      "url": "https://www.couchbase.com/products/cloud"
+},
+{
+      "_class": "com.cb.sync.entities.Cards",
+      "description": "Real-time server-side event processing",
+      "id": 3,
+      "image": "cb-eventing.jpg",
+      "productName": "EVENTING",
+      "url": "https://www.couchbase.com/products/eventing"
+},
+{
+      "_class": "com.cb.sync.entities.Cards",
+      "description": "Integrated JSON search on the Couchbase Data Platform",
+      "id": 4,
+      "image": "cb-fts.jpg",
+      "productName": "FULL-TEXT SEARCH",
+      "url": "https://www.couchbase.com/products/full-text-search"
+}
+]
