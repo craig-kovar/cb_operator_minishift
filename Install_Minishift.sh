@@ -1428,6 +1428,8 @@ function setup_c360_bucket
 {
 	logSection "Setting up the Customer 360 Bucket"
 
+	verify_status
+
 	log "oc cp ./resources/cards.json ${C360_POD}:/tmp/cards.json"
 	oc cp ./resources/cards.json ${C360_POD}:/tmp/cards.json
 
@@ -1441,8 +1443,8 @@ function setup_c360_bucket
 	log "oc cp ./resources/cards_fts.json ${C360_FTS_POD}:/tmp/cards_fts.json"
 	oc cp ./resources/cards_fts.json ${C360_FTS_POD}:/tmp/cards_fts.json
 
-	log "oc exec -it ${C360_FTS_POD} -- bash -c \"curl -u Administrator:password -XPUT http://localhost:8094/api/index/cards -H 'content-type: application/json'  -d @/tmp/cards_fts.json\""
-	oc exec -it ${C360_FTS_POD} -- bash -c "curl -u Administrator:password -XPUT http://localhost:8094/api/index/cards -H 'content-type: application/json'  -d @/tmp/cards_fts.json"
+	log "oc exec -it ${C360_FTS_POD} -- bash -c \"curl -u ${CB_USER}:${CB_PASS} -XPUT http://localhost:8094/api/index/cards -H 'content-type: application/json'  -d @/tmp/cards_fts.json\""
+	oc exec -it ${C360_FTS_POD} -- bash -c "curl -u ${CB_USER}:${CB_PASS} -XPUT http://localhost:8094/api/index/cards -H 'content-type: application/json'  -d @/tmp/cards_fts.json"
         
 	cp -fp ./resources/templates/customers_fts.json.template ./resources/customers_fts.json
 
@@ -1451,8 +1453,123 @@ function setup_c360_bucket
 	log "oc cp ./resources/customers_fts.json ${C360_FTS_POD}:/tmp/customers_fts.json"
 	oc cp ./resources/customers_fts.json ${C360_FTS_POD}:/tmp/customers_fts.json
 	
-	log "oc exec -it ${C360_FTS_POD} -- bash -c \"curl -u Administrator:password -XPUT http://localhost:8094/api/index/customers -H 'content-type: application/json'  -d @/tmp/customers_fts.json\""
-	oc exec -it ${C360_FTS_POD} -- bash -c "curl -u Administrator:password -XPUT http://localhost:8094/api/index/customers -H 'content-type: application/json'  -d @/tmp/customers_fts.json"
+	log "oc exec -it ${C360_FTS_POD} -- bash -c \"curl -u ${CB_USER}:${CB_PASS} -XPUT http://localhost:8094/api/index/customers -H 'content-type: application/json'  -d @/tmp/customers_fts.json\""
+	oc exec -it ${C360_FTS_POD} -- bash -c "curl -u ${CB_USER}:${CB_PASS} -XPUT http://localhost:8094/api/index/customers -H 'content-type: application/json'  -d @/tmp/customers_fts.json"
+	
+	log "oc exec -it ${C360_POD} -- bash -c \"curl -u ${CB_USER}:${CB_PASS} -XPUT http://localhost:8091/settings/rbac/users/local/$C360_BUCKET -d \"name=$C360_BUCKET&roles=admin,bucket_admin[$C360_BUCKET]&password=${C360_PASSWORD}\""
+	oc exec -it ${C360_POD} -- bash -c "curl -u ${CB_USER}:${CB_PASS} -XPUT http://localhost:8091/settings/rbac/users/local/$C360_BUCKET -d \"name=$C360_BUCKET&roles=admin,bucket_admin[$C360_BUCKET]&password=${C360_PASSWORD}\""
+}
+
+function deploy_app_server
+{
+	logSection "Deploying Application Server"
+	
+	verify_status
+
+	log "\noc new-app cbck/tomcat-git-mvn-jdk8
+	\n\t-e C360_POD=$C360_POD \
+	\n\t-e C360_BUCKET=$C360_BUCKET \
+	\n\t-e C360_PASSWORD=$C360_PASSWORD \
+	\n\t-e C360_MYSQL_HOST=`oc get pods | grep $MYSQL_NAME | grep -v deploy | cut -d' ' -f1` \
+	\n\t-e MYSQL_USER=$MYSQL_USER \
+	\n\t-e MYSQL_PASSWORD=$MYSQL_PASSWORD \
+	\n\t-e C360_POSTGRES_HOST=`oc get pods | grep $POSTGRESQL_NAME | grep -v deploy | cut -d' ' -f1` \
+	\n\t-e POSTGRESQL_DATABASE=$POSTGRESQL_DATABASE \
+	\n\t-e POSTGRESQL_USER=$POSTGRESQL_USER \
+	\n\t-e POSTGRESQL_PASSWORD=$POSTGRESQL_PASSWORD \
+	\n\t-e OPENSHIFT_JENKINS_JVM_ARCH=x86_64 \
+	\n"
+	
+	oc new-app cbck/tomcat-git-mvn-jdk8 \
+	-e C360_POD=$C360_POD \
+	-e C360_BUCKET=$C360_BUCKET \
+	-e C360_PASSWORD=$C360_PASSWORD \
+	-e C360_MYSQL_HOST=`oc get pods | grep $MYSQL_NAME | grep -v deploy | cut -d' ' -f1` \
+	-e MYSQL_USER=$MYSQL_USER \
+	-e MYSQL_PASSWORD=$MYSQL_PASSWORD \
+	-e C360_POSTGRES_HOST=`oc get pods | grep $POSTGRESQL_NAME | grep -v deploy | cut -d' ' -f1` \
+	-e POSTGRESQL_DATABASE=$POSTGRESQL_DATABASE \
+	-e POSTGRESQL_USER=$POSTGRESQL_USER \
+	-e POSTGRESQL_PASSWORD=$POSTGRESQL_PASSWORD \
+	--name=app-server
+
+	RETRY_CNT=1
+	SUCC_CNT=0
+	while [[ $SUCC_CNT -lt 1 && $RETRY_CNT -le $MAX_RETRY ]];do
+		log "checking app server status... try $RETRY_CNT"
+		SUCC_CNT=`oc get pods | grep "app-server" | grep -v deploy | grep -c "1/1"`
+		RETRY_CNT=$((RETRY_CNT+1))
+		sleep $RETRY_DELAY
+	done
+
+	if [ $SUCC_CNT -lt 1 ];then
+		log "App Server did not start..."
+		exit 1
+	fi
+
+	#APPNAME=`oc get pods | grep tomcat | grep -v deploy | cut -d' ' -f1`
+	#log "oc exec -it $APPNAME -- bash -c \"sudo apt-get -y install maven\""
+	#oc exec -it $APPNAME -- bash -c "sudo apt-get -y install maven"
+	
+	#log "oc exec -it $APPNAME -- bash -c \"sudo apt-get -y install git-core\""
+	#oc exec -it $APPNAME -- bash -c "sudo apt-get -y install git-core"
+}
+
+function remove_app_server
+{
+	logSection "Removing app-server"
+	verify_status
+	
+	log "Removing tomcat service"
+	count=`oc get svc | grep -c app-server`
+	if [ $count -eq 1 ];then
+		log "Running: oc delete svc app-server"
+		oc delete svc app-server
+	fi
+
+	log "Removing tomcat deploymentconfig"
+	count=`oc get dc | grep -c app-server`
+	if [ $count -eq 1 ];then
+		log "Running: oc delete dc app-server"
+		oc delete dc app-server
+	fi
+
+	log "Removing tomcat buildconfig"
+	count=`oc get bc | grep -c app-server`
+	if [ $count -eq 1 ];then
+		log "Running: oc delete bc app-server"
+		oc delete bc app-server
+	fi
+
+	log "Removing tomcat imagestream"
+	count=`oc get is | grep -c app-server`
+	if [ $count -eq 1 ];then
+		log "Running: oc delete is app-server"
+		oc delete is app-server
+	fi
+
+	log "Removing app-server route"
+	count=`oc get routes | grep -c app-server`
+	if [ $count -eq 1 ];then
+		log "Running: oc delete route app-server"
+		oc delete route app-server
+	fi
+}
+
+function deploy_c360_sync
+{
+	logSection "Deploying C360 Sync Services"
+
+	log "Cloning git hub"
+	APPNAME=`oc get pods | grep app-server | grep -v deploy | cut -d' ' -f1`
+	log "oc exec -it $APPNAME -- git clone https://github.com/craig-kovar/couchbase-sync-service.git /tmp/couchbase-sync-service"
+	oc exec -it $APPNAME -- bash -c "if [ -d /tmp/couchbase-sync-service ];then rm -rf /tmp/couchbase-sync-service fi"
+	oc exec -it $APPNAME -- git clone https://github.com/craig-kovar/couchbase-sync-service.git /tmp/couchbase-sync-service
+
+	log "Updating application.properties"
+	oc exec -it $APPNAME -- cp -fp /tmp/couchbase-sync-service/src/main/resources/application.properties.template /tmp/couchbase-sync-service/src/main/resources/application.properties
+
+	oc exec -it $APPNAME -- bash -c "sed -e \"s/###C360_POD###/$C360_POD/g\" -e \"s/###C360_BUCKET###/$C360_BUCKET/g\" -e \"s/###C360_PASS###/$C360_PASSWORD/g\""
 }
 
 function usage
@@ -1520,6 +1637,9 @@ function usage
 			\t\tload_postgres_data	--	Loads the postgresql data used by C360 Demo\n
 			\t\tremove_postgres	--	Removes the postgres DB\n
 			\t\tsetup_c360_bucket	--	Sets up the Couchbase Bucket for C360 Demo\n
+			\t\tdeploy_app_server	--	Deploy an application server to run C360 Demo\n
+			\t\tremove_app_server	--	Remove Application Server\n
+			\t\tdeploy_c360_sync	--	Deploys the C360 Demo Sync Services\n
 	"
 	echo $USAGE | more
 }
@@ -1693,6 +1813,18 @@ do
 		setup_c360_bucket)
 			checkOC
 			setup_c360_bucket
+			;;
+		deploy_app_server)
+			checkOC
+			deploy_app_server
+			;;
+		remove_app_server)
+			checkOC
+			remove_app_server
+			;;
+		deploy_c360_sync)
+			checkOC
+			deploy_c360_sync
 			;;
 		*)
 			log "Unknown command $var, ignoring..."
