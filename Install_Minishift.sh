@@ -83,10 +83,29 @@ function check_prereq
 
 }
 
+function login
+{
+	logSection "Logging in to OC cluster"
+	if [ ! -z $OC_CLUSTER_LOC ];then
+		log "Logging into $OC_CLUSTER_LOC"
+		log "oc login $OC_CLUSTER_LOC"
+		oc login $OC_CLUSTER_LOC
+
+		DEPLOY_SOURCE=REMOTE
+	fi	
+}
+
 function get_status
 {
 	logSection "Retrieving status...."
-	status=`minishift status | grep Minishift | cut -d" " -f3`
+	if [ -z $OC_CLUSTER_LOC ];then
+		status=`minishift status | grep Minishift | cut -d" " -f3`
+	else
+		status="Running"
+		DEPLOY_SOURCE=REMOTE
+	fi
+
+	log "Checking status of : $DEPLOY_SOURCE"
 	log "Current Status is : $status"
 }
 
@@ -975,7 +994,7 @@ function deploy_twitter_api
 
 		if [[ $SUCC_CNT -lt 1 || $PUSH_CNT -lt 1 ]];then
 			log "Build Success = $SUCC_CNT"
-			log "Pushi Success = $PUSH_CNT"
+			log "Push Success = $PUSH_CNT"
 			log "Failed to build|push application"
 			exit 1
 		fi
@@ -1130,7 +1149,7 @@ function deploy_twitter_streamer
 			\n\t-e TWITTER_CONSUMER_SECRET=$TWITTER_CONSUMER_SECRET \
 			\n\t-e TWITTER_TOKEN=$TWITTER_ACCESS_TOKEN \
 			\n\t-e TWITTER_SECRET=$TWITTER_ACCESS_SECRET \
-			\n\t-e TWITTER_FILTER='#RegisterToVote' \
+			\n\t-e TWITTER_FILTER=\"$TWITTER_FILTER\" \
 			\n\t-e COUCHBASE_CLUSTER=$CLUSTER_NAME \
 			\n\t-e COUCHBASE_USER=$CB_USER \
 			\n\t-e COUCHBASE_PASSWORD=$CB_PASS \
@@ -1143,7 +1162,7 @@ function deploy_twitter_streamer
        			 -e TWITTER_CONSUMER_SECRET=$TWITTER_CONSUMER_SECRET \
        			 -e TWITTER_TOKEN=$TWITTER_ACCESS_TOKEN \
       			 -e TWITTER_SECRET=$TWITTER_ACCESS_SECRET \
-      			 -e TWITTER_FILTER='#RegisterToVote' \
+      			 -e TWITTER_FILTER="$TWITTER_FILTER" \
       			 -e COUCHBASE_CLUSTER=$CLUSTER_NAME \
       			 -e COUCHBASE_USER=$CB_USER \
       			 -e COUCHBASE_PASSWORD=$CB_PASS \
@@ -1313,14 +1332,22 @@ function load_mysql_data
 	MYSQL_NAME_TMP=`oc get pods | grep ${MYSQL_NAME} | grep -v deploy | cut -d' ' -f1`
 
         cp -fp ./resources/templates/mysql-db.sql.template ./resources/mysql-db.sql
-
         sed -e "s/###MYSQL_DATABASE###/$MYSQL_DATABASE/g" -i .bkup ./resources/mysql-db.sql
+
+        cp -fp ./resources/templates/db.sql.template ./resources/db.sql
+        sed -e "s/###MYSQL_DATABASE###/$MYSQL_DATABASE/g" -i .bkup ./resources/db.sql
 
         log "oc cp ./resources/mysql-db.sql ${MYSQL_NAME_TMP}:/tmp/mysql-db.sql"
         oc cp ./resources/mysql-db.sql ${MYSQL_NAME_TMP}:/tmp/mysql-db.sql
 
+        log "oc cp ./resources/db.sql ${MYSQL_NAME_TMP}:/tmp/db.sql"
+        oc cp ./resources/db.sql ${MYSQL_NAME_TMP}:/tmp/db.sql
+
         log "oc exec -it ${MYSQL_NAME_TMP} -- bash -c \"mysql -u${MYSQL_USER} -p${MYSQL_PASSWORD} -h${MYSQL_NAME_TMP} < /tmp/mysql-db.sql\""
         oc exec -it ${MYSQL_NAME_TMP} -- bash -c "mysql -u${MYSQL_USER} -p${MYSQL_PASSWORD} -h${MYSQL_NAME_TMP} < /tmp/mysql-db.sql"
+        
+	log "oc exec -it ${MYSQL_NAME_TMP} -- bash -c \"mysql -u${MYSQL_USER} -p${MYSQL_PASSWORD} -h${MYSQL_NAME_TMP} < /tmp/db.sql\""
+        oc exec -it ${MYSQL_NAME_TMP} -- bash -c "mysql -u${MYSQL_USER} -p${MYSQL_PASSWORD} -h${MYSQL_NAME_TMP} < /tmp/db.sql"
 }
 
 function load_postgres_data
@@ -1333,7 +1360,11 @@ function load_postgres_data
 
         cp -fp ./resources/templates/postgresql-db.sql.template ./resources/postgresql-db.sql
 
-        sed -e "s/###POSTGRESQL_SCHEMA###/$POSTGRESQL_SCHEMA/g" -e "s/###POSTGRESQL_DATABASE###/$POSTGRESQL_DATABASE/g" -i .bkup ./resources/postgresql-db.sql
+        sed -e "s/###POSTGRESQL_SCHEMA###/$POSTGRESQL_SCHEMA/g" \
+	-e "s/###POSTGRESQL_DATABASE###/$POSTGRESQL_DATABASE/g" \
+	-e "s/###POSTGRESQL_USER###/$POSTGRESQL_USER/g" \
+	-e "s/###POSTGRESQL_PASSWORD###/$POSTGRESQL_PASSWORD/g" \
+	-i .bkup ./resources/postgresql-db.sql
 
         log "oc cp ./resources/postgresql-db.sql ${POSTGRE_NAME_TMP}:/tmp/postgresql-db.sql"
         oc cp ./resources/postgresql-db.sql ${POSTGRE_NAME_TMP}:/tmp/postgresql-db.sql
@@ -1458,6 +1489,10 @@ function setup_c360_bucket
 	
 	log "oc exec -it ${C360_POD} -- bash -c \"curl -u ${CB_USER}:${CB_PASS} -XPUT http://localhost:8091/settings/rbac/users/local/$C360_BUCKET -d \"name=$C360_BUCKET&roles=admin,bucket_admin[$C360_BUCKET]&password=${C360_PASSWORD}\""
 	oc exec -it ${C360_POD} -- bash -c "curl -u ${CB_USER}:${CB_PASS} -XPUT http://localhost:8091/settings/rbac/users/local/$C360_BUCKET -d \"name=$C360_BUCKET&roles=admin,bucket_admin[$C360_BUCKET]&password=${C360_PASSWORD}\""
+	log ""
+
+	log "oc exec -it ${C360_POD} -- bash -c \"curl -u ${CB_USER}:${CB_PASS} -XPOST http://localhost:8093/query/service -d \"statement=create primary index on \`$C360_BUCKET\`\""
+	oc exec -it ${C360_POD} -- bash -c "curl -v -u ${CB_USER}:${CB_PASS} -XPOST http://localhost:8093/query/service -d \"statement=create primary index on $C360_BUCKET\""
 }
 
 function deploy_app_server
@@ -1466,28 +1501,33 @@ function deploy_app_server
 	
 	verify_status
 
+	MYSQLAPP=`oc get pods | grep $MYSQL_NAME | grep -v deploy | cut -d' ' -f1`
+	POSTGRESAPP=`oc get pods | grep $POSTGRESQL_NAME | grep -v deploy | cut -d' ' -f1`
+
 	log "\noc new-app cbck/tomcat-git-mvn-jdk8
 	\n\t-e C360_POD=$C360_POD \
 	\n\t-e C360_BUCKET=$C360_BUCKET \
 	\n\t-e C360_PASSWORD=$C360_PASSWORD \
-	\n\t-e C360_MYSQL_HOST=`oc get pods | grep $MYSQL_NAME | grep -v deploy | cut -d' ' -f1` \
+	\n\t-e C360_MYSQL_HOST=$MYSQLAPP \
 	\n\t-e MYSQL_USER=$MYSQL_USER \
 	\n\t-e MYSQL_PASSWORD=$MYSQL_PASSWORD \
-	\n\t-e C360_POSTGRES_HOST=`oc get pods | grep $POSTGRESQL_NAME | grep -v deploy | cut -d' ' -f1` \
+	\n\t-e C360_POSTGRES_HOST=$POSTGRESAPP \
 	\n\t-e POSTGRESQL_DATABASE=$POSTGRESQL_DATABASE \
 	\n\t-e POSTGRESQL_USER=$POSTGRESQL_USER \
 	\n\t-e POSTGRESQL_PASSWORD=$POSTGRESQL_PASSWORD \
 	\n\t-e OPENSHIFT_JENKINS_JVM_ARCH=x86_64 \
 	\n"
+
+
 	
 	oc new-app cbck/tomcat-git-mvn-jdk8 \
 	-e C360_POD=$C360_POD \
 	-e C360_BUCKET=$C360_BUCKET \
 	-e C360_PASSWORD=$C360_PASSWORD \
-	-e C360_MYSQL_HOST=`oc get pods | grep $MYSQL_NAME | grep -v deploy | cut -d' ' -f1` \
+	-e C360_MYSQL_HOST=$MYSQLAPP \
 	-e MYSQL_USER=$MYSQL_USER \
 	-e MYSQL_PASSWORD=$MYSQL_PASSWORD \
-	-e C360_POSTGRES_HOST=`oc get pods | grep $POSTGRESQL_NAME | grep -v deploy | cut -d' ' -f1` \
+	-e C360_POSTGRES_HOST=$POSTGRESAPP \
 	-e POSTGRESQL_DATABASE=$POSTGRESQL_DATABASE \
 	-e POSTGRESQL_USER=$POSTGRESQL_USER \
 	-e POSTGRESQL_PASSWORD=$POSTGRESQL_PASSWORD \
@@ -1507,12 +1547,8 @@ function deploy_app_server
 		exit 1
 	fi
 
-	#APPNAME=`oc get pods | grep tomcat | grep -v deploy | cut -d' ' -f1`
-	#log "oc exec -it $APPNAME -- bash -c \"sudo apt-get -y install maven\""
-	#oc exec -it $APPNAME -- bash -c "sudo apt-get -y install maven"
-	
-	#log "oc exec -it $APPNAME -- bash -c \"sudo apt-get -y install git-core\""
-	#oc exec -it $APPNAME -- bash -c "sudo apt-get -y install git-core"
+	log "oc expose svc/app-server"
+	oc expose svc/app-server
 }
 
 function remove_app_server
@@ -1560,16 +1596,183 @@ function deploy_c360_sync
 {
 	logSection "Deploying C360 Sync Services"
 
+	MYSQLAPP=`oc get -o wide pods | grep $MYSQL_NAME | grep -v deploy | tr -s ' ' | cut -d' ' -f6`
+	POSTGRESAPP=`oc get -o wide pods | grep $POSTGRESQL_NAME | grep -v deploy | tr -s ' ' | cut -d' ' -f6`
+	C360APP=`oc get -o wide pods | grep $C360_POD | grep -v deploy | tr -s ' ' | cut -d' ' -f6`
+	
+
 	log "Cloning git hub"
 	APPNAME=`oc get pods | grep app-server | grep -v deploy | cut -d' ' -f1`
-	log "oc exec -it $APPNAME -- git clone https://github.com/craig-kovar/couchbase-sync-service.git /tmp/couchbase-sync-service"
-	oc exec -it $APPNAME -- bash -c "if [ -d /tmp/couchbase-sync-service ];then rm -rf /tmp/couchbase-sync-service fi"
-	oc exec -it $APPNAME -- git clone https://github.com/craig-kovar/couchbase-sync-service.git /tmp/couchbase-sync-service
+	log "oc exec -it $APPNAME -- git clone ${GIT_SYNC_SERVICE_URL} ${GIT_DIR}/couchbase-sync-service"
+	oc exec -it $APPNAME -- rm -rf ${GIT_DIR}/couchbase-sync-service
+	oc exec -it $APPNAME -- git clone ${GIT_SYNC_SERVICE_URL} ${GIT_DIR}/couchbase-sync-service
 
 	log "Updating application.properties"
-	oc exec -it $APPNAME -- cp -fp /tmp/couchbase-sync-service/src/main/resources/application.properties.template /tmp/couchbase-sync-service/src/main/resources/application.properties
 
-	oc exec -it $APPNAME -- bash -c "sed -e \"s/###C360_POD###/$C360_POD/g\" -e \"s/###C360_BUCKET###/$C360_BUCKET/g\" -e \"s/###C360_PASS###/$C360_PASSWORD/g\""
+	oc exec -it $APPNAME -- bash -c "echo $C360_MYSQL_HOST"
+
+	oc exec -it $APPNAME -- bash -c "sed -e s/###C360_POD###/$C360APP/g -e s/###C360_BUCKET###/$C360_BUCKET/g -e s/###C360_PASS###/$C360_PASSWORD/g \
+	-e s/###C360_MYSQL_HOST###/$MYSQLAPP/g \
+	-e s/###MYSQL_DATABASE###/$MYSQL_DATABASE/g \
+	-e s/###MYSQL_USER###/$MYSQL_USER/g \
+	-e s/###MYSQL_PASSWORD###/$MYSQL_PASSWORD/g \
+	-e s/###C360_POSTGRES_HOST###/$POSTGRESAPP/g \
+	-e s/###POSTGRESQL_DATABASE###/$POSTGRESQL_DATABASE/g \
+	-e s/###POSTGRESQL_USER###/$POSTGRESQL_USER/g \
+	-e s/###POSTGRESQL_PASSWORD###/$POSTGRESQL_PASSWORD/g \
+	/tmp/couchbase-sync-service/src/main/resources/application.properties.template \
+	> /tmp/couchbase-sync-service/src/main/resources/application.properties"
+
+	log "oc exec -it $APPNAME -- bash -c \"cd ${GIT_DIR}/couchbase-sync-service && mvn clean install\""
+	oc exec -it $APPNAME -- bash -c "cd ${GIT_DIR}/couchbase-sync-service && mvn clean install"
+
+	log "oc exec -it $APPNAME -- bash -c \"cd ${GIT_DIR}/couchbase-sync-service && mvn spring-boot:run\""
+	oc exec -it $APPNAME -- bash -c "cd ${GIT_DIR}/couchbase-sync-service && mvn spring-boot:run" 2>&1 > /dev/null &
+
+	log "Sleeping for 40 seconds for spring-boot to load"
+	sleep 40
+}
+
+function run_c360_sync
+{
+	logSection "Running the C360 Sync REST Api"
+
+	verify_status
+	
+	APP=`oc get -o wide pods | grep app-server | grep -v deploy | tr -s ' ' | cut -d' ' -f1`
+	log "oc exec -it $APP -- bash -c \"curl -u $C360_BUCKET:$C360_PASSWORD  -XPOST http://localhost:8081/api/sync/customer-data -H 'content-type: application/json'\""
+	oc exec -it $APP -- bash -c "curl -u $C360_BUCKET:$C360_PASSWORD  -XPOST http://localhost:8081/api/sync/customer-data -H 'content-type: application/json'"
+}
+
+function deploy_c360_ui
+{
+	logSection "Deploying C360 Sync Services"
+
+	MYSQLAPP=`oc get -o wide pods | grep $MYSQL_NAME | grep -v deploy | tr -s ' ' | cut -d' ' -f6`
+	POSTGRESAPP=`oc get -o wide pods | grep $POSTGRESQL_NAME | grep -v deploy | tr -s ' ' | cut -d' ' -f6`
+	C360APP=`oc get -o wide pods | grep $C360_POD | grep -v deploy | tr -s ' ' | cut -d' ' -f6`
+	
+
+	log "Cloning git hub"
+	APPNAME=`oc get pods | grep app-server | grep -v deploy | cut -d' ' -f1`
+	log "oc exec -it $APPNAME -- git clone ${GIT_SYNC_UI_URL} ${GIT_DIR}/couchbase-sync-ui"
+	oc exec -it $APPNAME -- rm -rf ${GIT_DIR}/couchbase-sync-ui
+	oc exec -it $APPNAME -- git clone ${GIT_SYNC_UI_URL} ${GIT_DIR}/couchbase-sync-ui
+
+	log "Updating application.properties"
+
+	oc exec -it $APPNAME -- bash -c "sed -e s/###C360_POD###/$C360APP/g -e s/###C360_BUCKET###/$C360_BUCKET/g -e s/###C360_PASS###/$C360_PASSWORD/g \
+	-e s/###C360_MYSQL_HOST###/$MYSQLAPP/g \
+	-e s/###MYSQL_DATABASE###/$MYSQL_DATABASE/g \
+	-e s/###MYSQL_USER###/$MYSQL_USER/g \
+	-e s/###MYSQL_PASSWORD###/$MYSQL_PASSWORD/g \
+	-e s/###C360_POSTGRES_HOST###/$POSTGRESAPP/g \
+	-e s/###POSTGRESQL_DATABASE###/$POSTGRESQL_DATABASE/g \
+	-e s/###POSTGRESQL_USER###/$POSTGRESQL_USER/g \
+	-e s/###POSTGRESQL_PASSWORD###/$POSTGRESQL_PASSWORD/g \
+	${GIT_DIR}/couchbase-sync-ui/src/main/resources/application.properties.template \
+	> ${GIT_DIR}/couchbase-sync-ui/src/main/resources/application.properties"
+
+	log "oc exec -it $APPNAME -- bash -c \"cd ${GIT_DIR}/couchbase-sync-ui && mvn clean install\""
+	oc exec -it $APPNAME -- bash -c "cd ${GIT_DIR}/couchbase-sync-ui && mvn clean install"
+
+	log "oc exec -it $APPNAME -- bash -c \"cd ${GIT_DIR}/couchbase-sync-ui && mvn jetty:run\""
+	oc exec -it $APPNAME -- bash -c "cd ${GIT_DIR}/couchbase-sync-ui && mvn jetty:run" 2>&1 > /dev/null &
+
+	log "Sleeping for 40 seconds to deploy application"
+	sleep 40
+
+}
+
+function deploy_couchmart
+{
+	logSection "Deploying Couchmart Server"
+	
+	verify_status
+
+	CBAPP=`oc get -o wide pods | grep $COUCHMART_POD | grep -v deploy | tr -s ' ' | cut -d' ' -f6`
+
+	log "\noc new-app cbck/couchmart
+	\n\t-e COUCHMART_NODE=$CBAPP \
+	\n\t-e COUCHMART_BUCKET=$COUCHMART_BUCKET \
+	\n\t-e COUCHMART_USER=$COUCHMART_USER \
+	\n\t-e COUCHMART_PASSWORD=$COUCHMART_PASSWORD \
+	\n\t-e COUCHMART_ADMIN_USER=$COUCHMART_ADMIN_USER \
+	\n\t-e COUCHMART_ADMIN_PASSWORD=$COUCHMART_ADMIN_PASSWORD \
+	\n"
+
+
+	
+	oc new-app cbck/couchmart \
+	-e COUCHMART_NODE=$CBAPP \
+	-e COUCHMART_BUCKET=$COUCHMART_BUCKET \
+	-e COUCHMART_USER=$COUCHMART_USER \
+	-e COUCHMART_PASSWORD=$COUCHMART_PASSWORD \
+	-e COUCHMART_ADMIN_USER=$COUCHMART_ADMIN_USER \
+	-e COUCHMART_ADMIN_PASSWORD=$COUCHMART_ADMIN_PASSWORD \
+	--name=couchmart
+
+	RETRY_CNT=1
+	SUCC_CNT=0
+	while [[ $SUCC_CNT -lt 1 && $RETRY_CNT -le $MAX_RETRY ]];do
+		log "checking couchmart status... try $RETRY_CNT"
+		SUCC_CNT=`oc get pods | grep "couchmart" | grep -v deploy | grep -c "1/1"`
+		RETRY_CNT=$((RETRY_CNT+1))
+		sleep $RETRY_DELAY
+	done
+
+	if [ $SUCC_CNT -lt 1 ];then
+		log "Couchmart did not start..."
+		exit 1
+	fi
+
+	log "oc expose dc/couchmart --port=8888 --name=couchmart"
+	oc expose dc/couchmart --port=8888 --name=couchmart
+
+	log "oc expose svc/couchmart"
+	oc expose svc/couchmart
+}
+
+function remove_couchmart
+{
+	logSection "Removing couchmart"
+	verify_status
+	
+		log "Removing couchmart service"
+		count=`oc get svc | grep -c couchmart`
+		if [ $count -eq 1 ];then
+			log "Running: oc delete svc couchmart"
+			oc delete svc couchmart
+		fi
+
+		log "Removing couchmart deploymentconfig"
+		count=`oc get dc | grep -c couchmart`
+		if [ $count -eq 1 ];then
+			log "Running: oc delete dc couchmart"
+			oc delete dc couchmart
+		fi
+
+		log "Removing couchmart buildconfig"
+		count=`oc get bc | grep -c couchmart`
+		if [ $count -eq 1 ];then
+			log "Running: oc delete bc couchmart"
+			oc delete bc couchmart
+		fi
+
+		log "Removing couchmart imagestream"
+		count=`oc get is | grep -c couchmart`
+		if [ $count -eq 1 ];then
+			log "Running: oc delete is couchmart"
+			oc delete is couchmart
+		fi
+
+		log "Removing couchmart route"
+		count=`oc get routes | grep -c couchmart`
+		if [ $count -eq 1 ];then
+			log "Running: oc delete route couchmart"
+			oc delete route couchmart
+		fi
+
 }
 
 function usage
@@ -1580,6 +1783,7 @@ function usage
 	 	\tSteps: \n
 	 		\t\tinstall_core		--	Installs Minishift, downloads the CB Operator, Starts minishift and sets up the OC command\n
 	 		\t\tstart_minishift		--	Starts Minishift\n
+			\t\tlogin			--	Login to OC cluster\n
 	 		\t\tcreate_project		--	Creates an OpenShift Project\n
 	 		\t\tinstall_crd			--	Installs the Couchbase Custom Resource Definition\n
 	 		\t\tget_user			--	Returns the current logged in user\n
@@ -1640,6 +1844,12 @@ function usage
 			\t\tdeploy_app_server	--	Deploy an application server to run C360 Demo\n
 			\t\tremove_app_server	--	Remove Application Server\n
 			\t\tdeploy_c360_sync	--	Deploys the C360 Demo Sync Services\n
+			\t\trun_c360_sync	--	Run the C360 Sync REST Api\n
+			\t\tdeploy_c360_ui	--	Deploy the C360 UI \n
+	\n
+		\tCouchmart commands: \n
+			\t\tdeploy_couchmart	--	Deploys the couchmart application \n
+			\t\tremove_couchmart	--	Remove couchmart \n
 	"
 	echo $USAGE | more
 }
@@ -1825,6 +2035,26 @@ do
 		deploy_c360_sync)
 			checkOC
 			deploy_c360_sync
+			;;
+		login)
+			checkOC
+			login
+			;;
+		run_c360_sync)
+			checkOC
+			run_c360_sync
+			;;
+		deploy_c360_ui)
+			checkOC
+			deploy_c360_ui
+			;;
+		deploy_couchmart)
+			checkOC
+			deploy_couchmart
+			;;
+		remove_couchmart)
+			checkOC
+			remove_couchmart
 			;;
 		*)
 			log "Unknown command $var, ignoring..."
