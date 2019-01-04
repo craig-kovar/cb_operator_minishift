@@ -791,8 +791,10 @@ function full_rollback
 			log "Running: oc delete project $OC_PROJ_NAME"
 			oc delete project $OC_PROJ_NAME
 		fi
-	
-		stopMinishift	
+
+		if [ "$DEPLOY_SOURCE" = "MINISHIFT" ];then	
+			stopMinishift	
+		fi
 	else
 		log "Minishift not running"
 	fi
@@ -891,7 +893,9 @@ function full_deploy
 {
 	logSection "Performing a full deployment"
 
-	start_minishift
+	if [ "$DEPLOY_SOURCE" = "MINISHIFT" ];then
+		start_minishift
+	fi
 
 	create_project
 
@@ -963,7 +967,7 @@ function deploy_twitter_api
 			return 0
 		fi
 
-		log "\noc new-app registry.access.redhat.com/redhat-openjdk-18/openjdk18-openshift:latest~https://github.com/couchbase-partners/redhat-pds.git \
+		log "\noc new-app registry.access.redhat.com/redhat-openjdk-18/openjdk18-openshift:latest~https://github.com/couchbase-partners/redhat-pds.git#${TWITTER_RELEASE} \
 			\n\t-e COUCHBASE_CLUSTER=$CLUSTER_NAME \
 			\n\t-e COUCHBASE_USER=$CB_USER \
 			\n\t-e COUCHBASE_PASSWORD=$CB_PASS \
@@ -971,7 +975,7 @@ function deploy_twitter_api
 			\n\t--context-dir=cb-rh-twitter/twitter-api \
 			\n\t--name=twitter-api\n"
 
-		oc new-app registry.access.redhat.com/redhat-openjdk-18/openjdk18-openshift:latest~https://github.com/couchbase-partners/redhat-pds.git \
+		oc new-app registry.access.redhat.com/redhat-openjdk-18/openjdk18-openshift:latest~https://github.com/couchbase-partners/redhat-pds.git#${TWITTER_RELEASE} \
 		-e COUCHBASE_CLUSTER=$CLUSTER_NAME \
 		-e COUCHBASE_USER=$CB_USER \
 		-e COUCHBASE_PASSWORD=$CB_PASS \
@@ -999,8 +1003,8 @@ function deploy_twitter_api
 			exit 1
 		fi
 
-		log "Exposing the twitter-api service:  oc expose svc twitter-api"
-		oc expose svc twitter-api
+		log "Exposing the twitter-api service:  oc expose svc/twitter-api"
+		oc expose svc/twitter-api
 	else
 		log "Minishift is not running"
 	fi
@@ -1063,8 +1067,8 @@ function deploy_twitter_ui
 			return 0
 		fi
 
-		log "Running: oc new-app ezeev/twitter-ui:latest"
-		oc new-app ezeev/twitter-ui:latest
+		log "Running: oc new-app ezeev/twitter-ui:${TWITTER_RELEASE}"
+		oc new-app ezeev/twitter-ui:${TWITTER_RELEASE}
 
 		log "Exposing the twitter-ui service:  oc expose svc twitter-ui"
 		oc expose svc twitter-ui
@@ -1144,7 +1148,7 @@ function deploy_twitter_streamer
 		cr_count=`oc get svc | grep -c "twitter-streamer"`
 		if [ $cr_count -eq 0 ];then
 	
-			log "\nRunning: oc new-app registry.access.redhat.com/redhat-openjdk-18/openjdk18-openshift:latest~https://github.com/couchbase-partners/redhat-pds.git \
+			log "\nRunning: oc new-app registry.access.redhat.com/redhat-openjdk-18/openjdk18-openshift:latest~https://github.com/couchbase-partners/redhat-pds.git#${TWITTER_RELEASE} \
 			\n\t-e TWITTER_CONSUMER_KEY=$TWITTER_CONSUMER_KEY \
 			\n\t-e TWITTER_CONSUMER_SECRET=$TWITTER_CONSUMER_SECRET \
 			\n\t-e TWITTER_TOKEN=$TWITTER_ACCESS_TOKEN \
@@ -1157,7 +1161,7 @@ function deploy_twitter_streamer
 			--context-dir=cb-rh-twitter/twitter-streamer \
 			--name=twitter-streamer\n"		
 	
-			oc new-app registry.access.redhat.com/redhat-openjdk-18/openjdk18-openshift:latest~https://github.com/couchbase-partners/redhat-pds.git \
+			oc new-app registry.access.redhat.com/redhat-openjdk-18/openjdk18-openshift:latest~https://github.com/couchbase-partners/redhat-pds.git#${TWITTER_RELEASE} \
       			 -e TWITTER_CONSUMER_KEY=$TWITTER_CONSUMER_KEY \
        			 -e TWITTER_CONSUMER_SECRET=$TWITTER_CONSUMER_SECRET \
        			 -e TWITTER_TOKEN=$TWITTER_ACCESS_TOKEN \
