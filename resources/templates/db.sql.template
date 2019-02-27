@@ -62,7 +62,7 @@ CREATE TABLE `user` (
 
 LOCK TABLES `user` WRITE;
 /*!40000 ALTER TABLE `user` DISABLE KEYS */;
-INSERT INTO `user` VALUES (4,'balaji@cb.com','$2a$11$FAOLeR//1yhm/8InmG0aLO8ZvztBDroM0o80Smm93TDLMCGMjX3PW'),(5,'john@cb.com','$2a$11$fn2JdgInAHQ7n9wcKz0f1.ZQkSCjXVTlU9WtcnSYQoRRPUetIkuVC'),(6,'support@cb.com','$2a$11$MgssekBlZOk0b9yXhkjJl.EEvuf2g1rPFtru2VC4O5JpOyeKQ1QpO');
+INSERT INTO `user` VALUES (4,'balaji@cb.com','$2a$11$bXiIg9Rf5GSXcqza/XGJjOBLGAqx2lz68Lui.HTkZBiRfgUDraWzG'),(5,'john@cb.com','$2a$11$bXiIg9Rf5GSXcqza/XGJjOBLGAqx2lz68Lui.HTkZBiRfgUDraWzG'),(6,'support@cb.com','$2a$11$bXiIg9Rf5GSXcqza/XGJjOBLGAqx2lz68Lui.HTkZBiRfgUDraWzG');
 /*!40000 ALTER TABLE `user` ENABLE KEYS */;
 UNLOCK TABLES;
 
